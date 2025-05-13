@@ -80,16 +80,16 @@ def getCarSalesSummary():
     try:
         cursor = conn.cursor()
         query = """
-            SELECT 
-                mk.MakeName, 
+            SELECT
+                mk.MakeName,
                 mo.ModelName,
                 COUNT(*) FILTER (WHERE cs.IsSold = FALSE) AS AvailableUnits,
                 COUNT(*) FILTER (WHERE cs.IsSold = TRUE) AS SoldUnits,
                 COALESCE(SUM(cs.Price) FILTER (WHERE cs.IsSold = TRUE), 0) AS TotalSales,
                 TO_CHAR(MAX(cs.SaleDate) FILTER (WHERE cs.IsSold = TRUE), 'DD-MM-YYYY') AS LastPurchasedAt
-            FROM CarSales cs
-            JOIN Make mk ON cs.MakeCode = mk.MakeCode
-            JOIN Model mo ON cs.ModelCode = mo.ModelCode
+            FROM Model mo
+            JOIN Make mk on mo.MakeCode = mk.MakeCode
+            LEFT JOIN CarSales cs on mk.MakeCode = cs.MakeCode and mo.ModelCode = cs.ModelCode
             GROUP BY mk.MakeName, mo.ModelName
             ORDER BY mk.MakeName, mo.ModelName
         """
@@ -97,7 +97,21 @@ def getCarSalesSummary():
         results = cursor.fetchall()
         cursor.close()
         conn.close()
-        return results
+
+
+        summary = [
+            {
+                'make': row[0],
+                'model': row[1],
+                'availableUnits': row[2],
+                'soldUnits': row[3],
+                'soldTotalPrices': f"{row[4]:.2f}",
+                'lastPurchaseAt': row[5] if row[5] else ''
+            }
+            for row in results
+        ]
+        return summary
+
     except Exception as e:
         print(f"Error during getCarSalesSummary: {e}")
         if conn:
