@@ -13,7 +13,7 @@ def openConnection():
 
     myHost = ""
     userid = ""
-    passwd = ""
+    passwd = ""  #test
     
     # Create a connection to the database
     conn = None
