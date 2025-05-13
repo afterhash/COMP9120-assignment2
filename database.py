@@ -11,9 +11,9 @@ Connect to the database using the connection string
 def openConnection():
     # connection parameters - ENTER YOUR LOGIN AND PASSWORD HERE
 
-    myHost = ""
-    userid = ""
-    passwd = ""  #test
+    myHost = "awsprddbs4836.shared.sydney.edu.au"
+    userid = "y25s1c9120_sliu0188"
+    passwd = "ehUYr8JZ"  #test
     
     # Create a connection to the database
     conn = None
@@ -34,8 +34,33 @@ def openConnection():
 Validate salesperson based on username and password
 '''
 def checkLogin(login, password):
+    conn = openConnection()
+    if conn is None:
+        return None
 
-    return ['jdoe', 'John', 'Doe']
+    try:
+        cursor = conn.cursor()
+        # Case-insensitive match for username
+        query = """
+            SELECT Username, FirstName, LastName
+            FROM Salesperson
+            WHERE LOWER(Username) = LOWER(%s) AND Password = %s
+        """
+        cursor.execute(query, (login, password))
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if result:
+            return list(result)  # ['jdoe', 'John', 'Doe']
+        else:
+            return None
+
+    except Exception as e:
+        print(f"Error during checkLogin: {e}")
+        if conn:
+            conn.close()
+        return None
 
 
 """
@@ -48,7 +73,36 @@ def checkLogin(login, password):
     :return: A list of car sale summaries.
 """
 def getCarSalesSummary():
-    return
+    conn = openConnection()
+    if conn is None:
+        return []
+
+    try:
+        cursor = conn.cursor()
+        query = """
+            SELECT 
+                mk.MakeName, 
+                mo.ModelName,
+                COUNT(*) FILTER (WHERE cs.IsSold = FALSE) AS AvailableUnits,
+                COUNT(*) FILTER (WHERE cs.IsSold = TRUE) AS SoldUnits,
+                COALESCE(SUM(cs.Price) FILTER (WHERE cs.IsSold = TRUE), 0) AS TotalSales,
+                TO_CHAR(MAX(cs.SaleDate) FILTER (WHERE cs.IsSold = TRUE), 'DD-MM-YYYY') AS LastPurchasedAt
+            FROM CarSales cs
+            JOIN Make mk ON cs.MakeCode = mk.MakeCode
+            JOIN Model mo ON cs.ModelCode = mo.ModelCode
+            GROUP BY mk.MakeName, mo.ModelName
+            ORDER BY mk.MakeName, mo.ModelName
+        """
+        cursor.execute(query)
+        results = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return results
+    except Exception as e:
+        print(f"Error during getCarSalesSummary: {e}")
+        if conn:
+            conn.close()
+        return []
 
 """
     Finds car sales based on the provided search string.

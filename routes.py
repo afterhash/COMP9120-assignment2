@@ -131,7 +131,7 @@ def new_carsale():
         times = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
         return render_template('new_carsale.html', user=user_details, times=times, session=session, page=page)
 
-	# If we're adding a new car sale
+    # If we're adding a new car sale
     success = database.addCarSale(request.form['make'],
                                 request.form['model'],
                                 request.form['builtyear'],
@@ -170,19 +170,19 @@ def update_carsale():
             'make': request.args.get('make'),
             'model': request.args.get('model'),
             'customer_name': request.args.get('customer'),
-			'salesperson_name': request.args.get('salesperson'),
+            'salesperson_name': request.args.get('salesperson'),
             'sale_date': sale_date
         }
 
         # If there is no carsale
         if carsale['carsale_id'] is None:
             carsale = []
-		    # Do not allow viewing if there is no admission to update
+            # Do not allow viewing if there is no admission to update
             page['bar'] = False
             flash("You do not have access to update that record!")
             return(redirect(url_for('index')))
 
-	    # Otherwise, if admission details can be retrieved
+        # Otherwise, if admission details can be retrieved
         times = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
         return render_template('update_carsale.html', carsaleInfo=carsale, user=user_details, times=times, session=session, page=page)
 
