@@ -50,7 +50,7 @@ def checkLogin(login, password):
         result = cursor.fetchone()
         cursor.close()
         conn.close()
-
+        
         if result:
             return list(result)  # ['jdoe', 'John', 'Doe']
         else:
@@ -128,7 +128,75 @@ def getCarSalesSummary():
     :return: A list of car sales matching the search string.
 """
 def findCarSales(searchString):
-    return
+    print(searchString)
+    conn = openConnection()
+    if conn is None:
+        return []
+
+    try:
+        cursor = conn.cursor()
+        searchString = searchString.strip()
+        query = """
+                SELECT
+                    CarSaleID,
+                    mk.MakeName,
+                    mo.ModelName,
+                    BuiltYear,
+                    Odometer,
+                    Price,
+                    IsSold,
+                    SaleDate,
+                    (c.FirstName || ' ' || c.LastName) AS BuyerName,
+                    (s.FirstName || ' ' || s.LastName) AS SalespersonName
+                FROM CarSales cs 
+                LEFT JOIN Make mk on cs.MakeCode = mk.MakeCode 
+                LEFT JOIN Model mo on cs.ModelCode = mo.ModelCode
+                LEFT JOIN Customer c on cs.BuyerID = c.CustomerID 
+                LEFT JOIN Salesperson s on cs.SalespersonID = s.UserName 
+                WHERE 
+                    (IsSold = FALSE OR (IsSold = TRUE AND SaleDate >= CURRENT_DATE - INTERVAL '3 years'))
+                    AND (
+                        LOWER(mk.MakeName) LIKE LOWER('%%' || %s || '%%')
+                        OR LOWER(mo.ModelName) LIKE LOWER('%%' || %s || '%%')
+                        OR LOWER((c.FirstName || ' ' || c.LastName)) LIKE LOWER('%%' || %s || '%%')
+                        OR LOWER((s.FirstName || ' ' || s.LastName)) LIKE LOWER('%%' || %s || '%%')
+                    )
+                ORDER BY 
+                    IsSold, 
+                    CASE WHEN IsSold = TRUE THEN SaleDate ELSE NULL END ASC,
+                    mk.MakeName ASC,
+                    mo.ModelName ASC
+            """
+        params = (searchString, searchString, searchString, searchString)
+        cursor.execute(query, params)  
+        print(2)
+        results = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        print(results)
+
+        car_sales = [
+            {
+                'carsale_id': row[0],
+                'make': row[1],
+                'model': row[2],
+                'builtYear': row[3],
+                'odometer': row[4],
+                'price': f"{row[5]:.2f}",
+                'isSold': row[6],
+                'sale_date': row[7] if row[7] else '',
+                'buyer': row[8] if row[8] else '',
+                'salesperson': row[9] if row[9] else ''
+            }
+            for row in results
+        ]
+        return car_sales
+
+    except Exception as e:
+        print(f"Error during findCarSales: {e}")
+        if conn:
+            conn.close()
+        return []
 
 """
     Adds a new car sale to the database.

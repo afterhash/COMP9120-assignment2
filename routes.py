@@ -79,7 +79,6 @@ def summary():
         return redirect(url_for('login'))
     
     summary = database.getCarSalesSummary()
-    print(summary)
     if (summary is None):
         summary = []
         flash("There are no summary in the system for " + user_details['firstName'] + " " + user_details['lastName'])
