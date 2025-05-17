@@ -221,12 +221,24 @@ def addCarSale(make, model, builtYear, odometer, price):
             odometer = int(odometer)
             price = float(price)
         except (ValueError, TypeError):
+            print("Invalid input types.")
             cur.close()
             conn.close()
             return False
         
-        cur.execute("SELECT add_car_sale(%s, %s, %s, %s, %s)", 
-                    (make, model, builtYear, odometer, price))
+        cur.execute("SELECT MakeCode FROM Make WHERE LOWER(MakeName) = LOWER(%s)", (make,))
+        make_result = cur.fetchone()
+        if not make_result:
+            print("Make not found.")
+            cur.close()
+            conn.close()
+            return False
+        make_code = make_result[0]
+
+        cur.execute("""
+            INSERT INTO CarSales (MakeCode, ModelCode, BuiltYear, Odometer, Price, IsSold, SaleDate, BuyerID, SalespersonID)
+            VALUES (%s, %s, %s, %s, %s, FALSE, NULL, NULL, NULL)
+        """, (make_code, model_code, builtYear, odometer, price))
         
         conn.commit()
         
@@ -235,11 +247,11 @@ def addCarSale(make, model, builtYear, odometer, price):
         
         return True
     
-    except psycopg2.Error as e:
+    except Exception as e:
+        print(f"Error during addCarSale: {e}")
         if conn:
             conn.rollback()
             conn.close()
-        print("Database error:", e)
         return False
 
 """
@@ -256,32 +268,74 @@ def updateCarSale(carsaleid, customer, salesperson, saledate):
     conn = openConnection()
     if conn is None:
         return False
-    
+
     try:
         cur = conn.cursor()
-        
+
         try:
             carsaleid = int(carsaleid)
         except (ValueError, TypeError):
+            print("Invalid CarSaleID.")
             cur.close()
             conn.close()
             return False
-        
-        
-        cur.execute("SELECT update_car_sale(%s, %s, %s, %s)", 
-                    (carsaleid, customer, salesperson, saledate))
-        result = cur.fetchone()[0]
-        
+
+        cur.execute("SELECT CustomerID FROM Customer WHERE LOWER(CustomerID) = LOWER(%s)", (customer,))
+        customer_result = cur.fetchone()
+        if not customer_result:
+            print("Customer not found.")
+            cur.close()
+            conn.close()
+            return False
+        customer_id = customer_result[0]
+
+        cur.execute("SELECT Username FROM Salesperson WHERE LOWER(Username) = LOWER(%s)", (salesperson,))
+        salesperson_result = cur.fetchone()
+        if not salesperson_result:
+            print("Salesperson not found.")
+            cur.close()
+            conn.close()
+            return False
+        salesperson_id = salesperson_result[0]
+
+        if saledate is None:
+            print("Sale date is required.")
+            cur.close()
+            conn.close()
+            return False
+
+        try:
+            from datetime import datetime, date
+            sale_date_obj = datetime.strptime(saledate, '%Y-%m-%d').date()
+            if sale_date_obj > date.today():
+                print("Sale date cannot be in the future.")
+                cur.close()
+                conn.close()
+                return False
+        except ValueError:
+            print("Invalid sale date format.")
+            cur.close()
+            conn.close()
+            return False
+
+
+        cur.execute("""
+            UPDATE CarSales
+            SET BuyerID = %s,
+                SalespersonID = %s,
+                SaleDate = %s,
+                IsSold = TRUE
+            WHERE CarSaleID = %s
+        """, (customer_id, salesperson_id, sale_date_obj, carsaleid))
+
         conn.commit()
-        
         cur.close()
         conn.close()
-        
-        return result
-    
-    except psycopg2.Error as e:
+        return True
+
+    except Exception as e:
+        print(f"Error during updateCarSale: {e}")
         if conn:
             conn.rollback()
             conn.close()
-        print("Database error:", e)
         return False
