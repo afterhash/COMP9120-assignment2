@@ -209,7 +209,38 @@ def findCarSales(searchString):
     :return: A boolean indicating if the operation was successful or not.
 """
 def addCarSale(make, model, builtYear, odometer, price):
-    return
+    conn = openConnection()
+    if conn is None:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        
+        try:
+            builtYear = int(builtYear)
+            odometer = int(odometer)
+            price = float(price)
+        except (ValueError, TypeError):
+            cur.close()
+            conn.close()
+            return False
+        
+        cur.execute("SELECT add_car_sale(%s, %s, %s, %s, %s)", 
+                    (make, model, builtYear, odometer, price))
+        
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        return True
+    
+    except psycopg2.Error as e:
+        if conn:
+            conn.rollback()
+            conn.close()
+        print("Database error:", e)
+        return False
 
 """
     Updates an existing car sale in the database.
@@ -221,5 +252,36 @@ def addCarSale(make, model, builtYear, odometer, price):
     :param car_sale: The CarSale object containing updated details for the car sale.
     :return: A boolean indicating whether the update was successful or not.
 """
-def updateCarSale(carsaleid, customer, salesperosn, saledate):
-    return
+def updateCarSale(carsaleid, customer, salesperson, saledate):
+    conn = openConnection()
+    if conn is None:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        
+        try:
+            carsaleid = int(carsaleid)
+        except (ValueError, TypeError):
+            cur.close()
+            conn.close()
+            return False
+        
+        
+        cur.execute("SELECT update_car_sale(%s, %s, %s, %s)", 
+                    (carsaleid, customer, salesperson, saledate))
+        result = cur.fetchone()[0]
+        
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        return result
+    
+    except psycopg2.Error as e:
+        if conn:
+            conn.rollback()
+            conn.close()
+        print("Database error:", e)
+        return False
