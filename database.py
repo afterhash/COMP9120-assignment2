@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import psycopg2
+from datetime import datetime, date
 
 #####################################################
 ##  Database Connection
@@ -13,7 +14,7 @@ def openConnection():
 
     myHost = "awsprddbs4836.shared.sydney.edu.au"
     userid = "y25s1c9120_sliu0188"
-    passwd = "ehUYr8JZ"  #test
+    passwd = "ehUYr8JZ"
     
     # Create a connection to the database
     conn = None
@@ -128,53 +129,60 @@ def getCarSalesSummary():
     :return: A list of car sales matching the search string.
 """
 def findCarSales(searchString):
-    print(searchString)
+    # get database connection
     conn = openConnection()
     if conn is None:
         return []
 
     try:
         cursor = conn.cursor()
+
+        # process argument
         searchString = searchString.strip()
+
+        # build query
         query = """
-                SELECT
-                    CarSaleID,
-                    mk.MakeName,
-                    mo.ModelName,
-                    BuiltYear,
-                    Odometer,
-                    Price,
-                    IsSold,
-                    SaleDate,
-                    (c.FirstName || ' ' || c.LastName) AS BuyerName,
-                    (s.FirstName || ' ' || s.LastName) AS SalespersonName
-                FROM CarSales cs 
-                LEFT JOIN Make mk on cs.MakeCode = mk.MakeCode 
-                LEFT JOIN Model mo on cs.ModelCode = mo.ModelCode
-                LEFT JOIN Customer c on cs.BuyerID = c.CustomerID 
-                LEFT JOIN Salesperson s on cs.SalespersonID = s.UserName 
-                WHERE 
-                    (IsSold = FALSE OR (IsSold = TRUE AND SaleDate >= CURRENT_DATE - INTERVAL '3 years'))
-                    AND (
-                        LOWER(mk.MakeName) LIKE LOWER('%%' || %s || '%%')
-                        OR LOWER(mo.ModelName) LIKE LOWER('%%' || %s || '%%')
-                        OR LOWER((c.FirstName || ' ' || c.LastName)) LIKE LOWER('%%' || %s || '%%')
-                        OR LOWER((s.FirstName || ' ' || s.LastName)) LIKE LOWER('%%' || %s || '%%')
-                    )
-                ORDER BY 
-                    IsSold, 
-                    CASE WHEN IsSold = TRUE THEN SaleDate ELSE NULL END ASC,
-                    mk.MakeName ASC,
-                    mo.ModelName ASC
-            """
+            SELECT
+                CarSaleID,
+                mk.MakeName,
+                mo.ModelName,
+                BuiltYear,
+                Odometer,
+                Price,
+                IsSold,
+                SaleDate,
+                (c.FirstName || ' ' || c.LastName) AS BuyerName,
+                (s.FirstName || ' ' || s.LastName) AS SalespersonName
+            FROM CarSales cs 
+            LEFT JOIN Make mk on cs.MakeCode = mk.MakeCode 
+            LEFT JOIN Model mo on cs.ModelCode = mo.ModelCode
+            LEFT JOIN Customer c on cs.BuyerID = c.CustomerID 
+            LEFT JOIN Salesperson s on cs.SalespersonID = s.UserName 
+            WHERE 
+                (IsSold = FALSE OR (IsSold = TRUE AND SaleDate >= CURRENT_DATE - INTERVAL '3 years'))
+                AND (
+                    LOWER(mk.MakeName) LIKE LOWER('%%' || %s || '%%')
+                    OR LOWER(mo.ModelName) LIKE LOWER('%%' || %s || '%%')
+                    OR LOWER((c.FirstName || ' ' || c.LastName)) LIKE LOWER('%%' || %s || '%%')
+                    OR LOWER((s.FirstName || ' ' || s.LastName)) LIKE LOWER('%%' || %s || '%%')
+                )
+            ORDER BY 
+                IsSold, 
+                CASE WHEN IsSold = TRUE THEN SaleDate ELSE NULL END ASC,
+                mk.MakeName ASC,
+                mo.ModelName ASC
+        """
         params = (searchString, searchString, searchString, searchString)
-        cursor.execute(query, params)  
-        print(2)
+
+        # execute query
+        cursor.execute(query, params)
         results = cursor.fetchall()
+
+        # close connection
         cursor.close()
         conn.close()
-        print(results)
 
+        # handle result
         car_sales = [
             {
                 'carsale_id': row[0],
@@ -209,42 +217,77 @@ def findCarSales(searchString):
     :return: A boolean indicating if the operation was successful or not.
 """
 def addCarSale(make, model, builtYear, odometer, price):
+    # check arguments
+    try:
+        builtYear = int(builtYear)
+        odometer = int(odometer)
+        price = float(price)
+        current_year = datetime.now().year
+        if builtYear < 0 or builtYear > current_year:
+            raise Exception("Invalid builtYear.")
+        if odometer < 0:
+            raise Exception("Invalid odometer.")
+        if price < 0:
+            raise Exception("Invalid price.")
+        
+    except Exception as e:
+        print(f"Invalid argument of addCarSale: {e}")
+        return False
+    
+    # process arguments
+    make = make.strip()
+    model = model.strip()
+    price = round(price, 2)
+
     conn = openConnection()
     if conn is None:
         return False
     
+    # get database connection
     try:
         cur = conn.cursor()
-        
-        try:
-            builtYear = int(builtYear)
-            odometer = int(odometer)
-            price = float(price)
-        except (ValueError, TypeError):
-            print("Invalid input types.")
-            cur.close()
-            conn.close()
-            return False
-        
-        cur.execute("SELECT MakeCode FROM Make WHERE LOWER(MakeName) = LOWER(%s)", (make,))
+        # check make
+        query = """
+            SELECT MakeCode 
+            FROM Make 
+            WHERE LOWER(MakeName) = LOWER(%s)
+        """
+        cur.execute(query, (make,))
         make_result = cur.fetchone()
         if not make_result:
-            print("Make not found.")
+            print("Error during addCarSale: Make not found.")
             cur.close()
             conn.close()
             return False
         make_code = make_result[0]
 
-        cur.execute("""
+        # check model
+        query = """
+            SELECT ModelCode 
+            FROM Model 
+            WHERE LOWER(ModelName) = LOWER(%s)
+            AND MakeCode = %s
+        """
+        cur.execute(query, (model, make_code))
+        model_result = cur.fetchone()
+        if not model_result:
+            print("Error during addCarSale: Model not found.")
+            cur.close()
+            conn.close()
+            return False
+        model_code = model_result[0]
+
+        # insertion
+        sql = """
             INSERT INTO CarSales (MakeCode, ModelCode, BuiltYear, Odometer, Price, IsSold, SaleDate, BuyerID, SalespersonID)
             VALUES (%s, %s, %s, %s, %s, FALSE, NULL, NULL, NULL)
-        """, (make_code, model_code, builtYear, odometer, price))
-        
+        """
+        cur.execute(sql, (make_code, model_code, builtYear, odometer, price))
         conn.commit()
         
+        # close connection
         cur.close()
         conn.close()
-        
         return True
     
     except Exception as e:
@@ -265,68 +308,65 @@ def addCarSale(make, model, builtYear, odometer, price):
     :return: A boolean indicating whether the update was successful or not.
 """
 def updateCarSale(carsaleid, customer, salesperson, saledate):
+    # process argument
+    try:
+        carsaleid = int(carsaleid)
+        if saledate is None:
+            raise Exception("Sale date is required.")
+        sale_date_obj = datetime.strptime(saledate, '%Y-%m-%d').date()
+        if sale_date_obj > date.today():
+            raise Exception("Sale date cannot be in the future.")
+        
+    except Exception as e:
+        print(f"Error during updateCarSale: {e}")
+        return False
+
+    # get connection
     conn = openConnection()
     if conn is None:
         return False
 
     try:
         cur = conn.cursor()
-
-        try:
-            carsaleid = int(carsaleid)
-        except (ValueError, TypeError):
-            print("Invalid CarSaleID.")
-            cur.close()
-            conn.close()
-            return False
-
-        cur.execute("SELECT CustomerID FROM Customer WHERE LOWER(CustomerID) = LOWER(%s)", (customer,))
+        # check customer
+        query = """
+            SELECT CustomerID 
+            FROM Customer 
+            WHERE LOWER(CustomerID) = LOWER(%s)
+        """
+        cur.execute(query, (customer,))
         customer_result = cur.fetchone()
         if not customer_result:
-            print("Customer not found.")
+            print("Error during updateCarSale: Customer not found.")
             cur.close()
             conn.close()
             return False
         customer_id = customer_result[0]
 
-        cur.execute("SELECT Username FROM Salesperson WHERE LOWER(Username) = LOWER(%s)", (salesperson,))
+        # check salesperson
+        query = """
+            SELECT Username 
+            FROM Salesperson 
+            WHERE LOWER(Username) = LOWER(%s)
+        """
+        cur.execute(query, (salesperson,))
         salesperson_result = cur.fetchone()
         if not salesperson_result:
-            print("Salesperson not found.")
+            print("Error during updateCarSale: Salesperson not found.")
             cur.close()
             conn.close()
             return False
         salesperson_id = salesperson_result[0]
 
-        if saledate is None:
-            print("Sale date is required.")
-            cur.close()
-            conn.close()
-            return False
-
-        try:
-            from datetime import datetime, date
-            sale_date_obj = datetime.strptime(saledate, '%Y-%m-%d').date()
-            if sale_date_obj > date.today():
-                print("Sale date cannot be in the future.")
-                cur.close()
-                conn.close()
-                return False
-        except ValueError:
-            print("Invalid sale date format.")
-            cur.close()
-            conn.close()
-            return False
-
-
-        cur.execute("""
+        sql = """
             UPDATE CarSales
             SET BuyerID = %s,
                 SalespersonID = %s,
                 SaleDate = %s,
                 IsSold = TRUE
             WHERE CarSaleID = %s
-        """, (customer_id, salesperson_id, sale_date_obj, carsaleid))
+        """
+        cur.execute(sql, (customer_id, salesperson_id, sale_date_obj, carsaleid))
 
         conn.commit()
         cur.close()
