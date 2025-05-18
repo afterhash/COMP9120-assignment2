@@ -35,34 +35,28 @@ def openConnection():
 Validate salesperson based on username and password
 '''
 def checkLogin(login, password):
+    # get database connection
     conn = openConnection()
     if conn is None:
         return None
 
     try:
         cursor = conn.cursor()
-        # Case-insensitive match for username
-        query = """
-            SELECT Username, FirstName, LastName
-            FROM Salesperson
-            WHERE LOWER(Username) = LOWER(%s) AND Password = %s
-        """
-        cursor.execute(query, (login, password))
+        # Call the stored procedure
+        cursor.callproc('authenticate_salesperson', (login, password))
         result = cursor.fetchone()
         cursor.close()
         conn.close()
         
         if result:
-            return list(result)  # ['jdoe', 'John', 'Doe']
-        else:
-            return None
+            return list(result)  # Returns ['jdoe', 'John', 'Doe']
+        return None
 
     except Exception as e:
         print(f"Error during checkLogin: {e}")
         if conn:
             conn.close()
         return None
-
 
 """
     Retrieves the summary of car sales.
@@ -74,32 +68,20 @@ def checkLogin(login, password):
     :return: A list of car sale summaries.
 """
 def getCarSalesSummary():
+    # get database connection
     conn = openConnection()
     if conn is None:
         return []
 
     try:
         cursor = conn.cursor()
-        query = """
-            SELECT
-                mk.MakeName,
-                mo.ModelName,
-                COUNT(*) FILTER (WHERE cs.IsSold = FALSE) AS AvailableUnits,
-                COUNT(*) FILTER (WHERE cs.IsSold = TRUE) AS SoldUnits,
-                COALESCE(SUM(cs.Price) FILTER (WHERE cs.IsSold = TRUE), 0) AS TotalSales,
-                TO_CHAR(MAX(cs.SaleDate) FILTER (WHERE cs.IsSold = TRUE), 'DD-MM-YYYY') AS LastPurchasedAt
-            FROM Model mo
-            JOIN Make mk on mo.MakeCode = mk.MakeCode
-            LEFT JOIN CarSales cs on mk.MakeCode = cs.MakeCode and mo.ModelCode = cs.ModelCode
-            GROUP BY mk.MakeName, mo.ModelName
-            ORDER BY mk.MakeName, mo.ModelName
-        """
-        cursor.execute(query)
+        # Call the stored procedure
+        cursor.callproc('get_car_sales_summary', ())
         results = cursor.fetchall()
         cursor.close()
         conn.close()
 
-
+        # process result
         summary = [
             {
                 'make': row[0],
